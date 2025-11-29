@@ -2,305 +2,288 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AI Resume Search (Improved Prototype)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b1220" />
+<title>AI Resume Search (Full Working Prototype)</title>
 
-<!-- TFJS -->
+<!-- TensorFlow.js -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
-<!-- USE (explicit dist build tends to be more reliable) -->
+
+<!-- Universal Sentence Encoder -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
 
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; margin: auto; background: #f7f9fc; color:#222; }
-  h1 { text-align:center; margin-bottom: 6px; }
-  .sub { text-align:center; color:#555; margin: 0 0 18px; font-size: 14px; }
-  #bar { display:flex; gap:10px; align-items:center; }
-  #searchBox { flex:1; padding: 12px; font-size: 16px; border: 1px solid #cfd8e3; border-radius: 10px; }
-  #clearBtn { padding: 12px 14px; border: 1px solid #cfd8e3; border-radius: 10px; background: white; cursor:pointer; }
-  #status { margin: 10px 0 16px; font-size: 13px; color:#444; }
-  .pillRow { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 16px; }
-  .pill { background:#fff; border:1px solid #e3e9f2; border-radius:999px; padding:8px 10px; cursor:pointer; font-size: 13px; }
-  .candidate-card { background: white; padding: 16px; margin-bottom: 12px; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.06); }
-  .score { float:right; background: #eef7ff; padding: 4px 8px; border-radius: 8px; font-size: 13px; font-weight: bold; }
-  .meta { color:#666; font-size: 13px; margin-top: 6px; }
-  mark { background: #fff2a8; padding: 0 3px; border-radius: 4px; }
+  :root{
+    --bg: #0b1220;
+    --panel: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.14);
+    --text: #e9eefc;
+    --muted: rgba(233,238,252,0.7);
+    --chip: rgba(255,255,255,0.10);
+    --chipBorder: rgba(255,255,255,0.18);
+    --card: rgba(255,255,255,0.07);
+    --shadow: 0 14px 40px rgba(0,0,0,0.35);
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 14px;
+  }
+
+  .app { max-width: 980px; margin: auto; }
+
+  header {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
+
+  h1 { margin: 0; font-size: 20px; }
+  .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  .bar {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+
+  input[type="text"] {
+    font-size: 16px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  button {
+    background: rgba(255,255,255,0.12);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 12px 14px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  .statusRow {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #777;
+  }
+  .dot.ok { background: #4ade80; }
+  .dot.warn { background: #facc15; }
+
+  .chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin-top: 12px;
+  }
+  .pill {
+    border: 1px solid var(--chipBorder);
+    background: var(--chip);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  #activeFilter {
+    margin: 12px 4px;
+    font-size: 13px;
+    color: rgba(233,238,252,0.9);
+  }
+
+  .results {
+    display: grid;
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .cardTop {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .badge {
+    background: rgba(125,211,252,0.12);
+    border: 1px solid rgba(125,211,252,0.35);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: bold;
+  }
+
+  .snippet {
+    margin-top: 10px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  mark {
+    background: rgba(250, 204, 21, 0.35);
+    border-radius: 4px;
+    padding: 2px 4px;
+  }
+
 </style>
 </head>
 
 <body>
-<h1>AI Resume Search</h1>
-<p class="sub">Semantic matching (USE embeddings) + skill keyword boost (so “C++” works reliably). No backend.</p>
+<div class="app">
+  <header>
+    <h1>AI Resume Search</h1>
+    <p class="sub">Semantic matching + keyword boosting. Fully in-browser AI.</p>
 
-<div id="bar">
-  <input id="searchBox" type="text" placeholder="Try: C++ embedded linux, Java microservices, 5G telecom..." disabled />
-  <button id="clearBtn" title="Clear">Clear</button>
+    <div class="bar">
+      <input id="searchBox" type="text" placeholder="Try: C++ embedded linux, Java microservices, 5G, ML..." disabled />
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <div class="statusRow">
+      <div id="dot" class="dot"></div>
+      <div id="status" class="status">Loading AI model…</div>
+    </div>
+
+    <div class="chips">
+      <button class="pill" data-q="C++ embedded linux RTOS">C++ Embedded</button>
+      <button class="pill" data-q="Java microservices spring boot">Java Backend</button>
+      <button class="pill" data-q="Python machine learning MLOps">Python ML</button>
+      <button class="pill" data-q="5G telecom LTE RF">5G Telecom</button>
+    </div>
+  </header>
+
+  <div id="activeFilter">🔍 Active Filter: <span id="filterText">None</span></div>
+
+  <div id="results" class="results"></div>
 </div>
-
-<div id="status">Loading AI model…</div>
-
-<div class="pillRow">
-  <button class="pill" data-q="C++ embedded linux RTOS">C++ embedded linux RTOS</button>
-  <button class="pill" data-q="Java spring boot microservices">Java microservices</button>
-  <button class="pill" data-q="5G LTE telecom RF">5G telecom</button>
-  <button class="pill" data-q="Python machine learning MLOps">Python ML</button>
-</div>
-
-<h2 style="margin: 10px 0;">Results</h2>
-<div id="results"></div>
 
 <script>
 let model = null;
 let resumeDB = [];
-let resumeEmbeddings = null; // array of vectors (aligned with resumeDB)
+let resumeEmbeddings = null;
 
-// ----------------------
-// Sample Resume Database
-// ----------------------
+// -------------------------
+// 25 Sample Resumes
+// -------------------------
 const seedResumes = [
-  {
-    name: "Arjun Mehta",
-    resumeText: `
-      Senior C++ and Embedded Engineer, 8 years experience.
-      Skills: C++, Embedded Linux, RTOS, CAN Bus, Automotive ECUs,
-      ARM Microcontrollers, Telecommunication Protocols, Linux Kernel modules.
-    `
-  },
-  {
-    name: "Sophia Rodriguez",
-    resumeText: `
-      Java Backend Developer, 6 years experience.
-      Skills: Java, Spring Boot, APIs, Microservices, Docker, Cloud,
-      Kubernetes, SQL, Kafka.
-    `
-  },
-  {
-    name: "Ethan Williams",
-    resumeText: `
-      Telecom Engineer specialized in 5G and LTE.
-      Skills: Telecommunication, RF Systems, 5G NR, LTE,
-      Protocol Stack, Wireless Optimization.
-    `
-  },
-  {
-    name: "Mira Patel",
-    resumeText: `
-      Embedded Firmware Engineer with IoT background.
-      Skills: C, C++, FreeRTOS, BLE, MQTT, STM32, PCB debugging.
-    `
-  },
-  {
-    name: "Daniel Chen",
-    resumeText: `
-      Python Developer & ML Engineer.
-      Skills: Python, TensorFlow, React, APIs, Data Engineering,
-      MLOps, Cloud deployment.
-    `
-  }
+  { name: "Arjun Mehta", resumeText: `Senior C++ and Embedded Engineer, 8 years experience. Skills: C++, Embedded Linux, RTOS, CAN Bus, Automotive ECUs, ARM Microcontrollers, Telecommunication Protocols, Linux Kernel modules.` },
+  { name: "Sophia Rodriguez", resumeText: `Java Backend Developer, 6 years experience. Skills: Java, Spring Boot, APIs, Microservices, Docker, Cloud, Kubernetes, SQL, Kafka.` },
+  { name: "Ethan Williams", resumeText: `Telecom Engineer specialized in 5G and LTE. Skills: Telecommunication, RF Systems, 5G NR, LTE, Protocol Stack, Wireless Optimization.` },
+  { name: "Mira Patel", resumeText: `Embedded Firmware Engineer with IoT background. Skills: C, C++, FreeRTOS, BLE, MQTT, STM32, PCB debugging.` },
+  { name: "Daniel Chen", resumeText: `Python Developer & ML Engineer. Skills: Python, TensorFlow, React, APIs, Data Engineering, MLOps, Cloud deployment.` },
+
+  { name: "Priya Sharma", resumeText: `Data Engineer with strong ETL background. Skills: Python, PySpark, Hadoop, Hive, Airflow, AWS Glue, Redshift.` },
+  { name: "Carlos Gomez", resumeText: `Full Stack Developer. Skills: JavaScript, React, Node.js, Express, MongoDB, REST APIs, CI/CD.` },
+  { name: "Emily Johnson", resumeText: `Cloud DevOps Engineer. Skills: AWS, Terraform, Docker, Kubernetes, CI/CD, Linux automation.` },
+  { name: "Henry Thompson", resumeText: `QA Automation Engineer. Skills: Selenium, Cypress, Java, Python, Jenkins, API testing.` },
+  { name: "Ravi Kumar", resumeText: `Network Engineer. Skills: Cisco Routers, Switches, BGP, OSPF, SD-WAN, VPN, Firewalls.` },
+
+  { name: "Laura Smith", resumeText: `UX/UI Designer. Skills: Figma, Wireframing, User Research, Accessibility, Prototyping.` },
+  { name: "Ahmed Ibrahim", resumeText: `Cybersecurity Analyst. Skills: SIEM, SOC, Incident Response, Kali Linux, Firewalls.` },
+  { name: "Jessica Lee", resumeText: `Machine Learning Engineer. Skills: Python, PyTorch, NLP, Computer Vision, MLOps.` },
+  { name: "David Park", resumeText: `Backend Developer. Skills: Go (Golang), Microservices, GRPC, Redis, SQL.` },
+  { name: "Harsh Verma", resumeText: `Automotive Controls Engineer. Skills: MATLAB, Simulink, CAN, AUTOSAR, ECU calibration.` },
+
+  { name: "Olivia Brown", resumeText: `Mobile Developer. Skills: Flutter, Dart, Android, iOS, Firebase.` },
+  { name: "Benjamin Carter", resumeText: `FPGA Engineer. Skills: Verilog, VHDL, Xilinx, Vivado, Embedded Linux.` },
+  { name: "Sara Khan", resumeText: `Robotic Systems Engineer. Skills: ROS, Python, C++, SLAM, Lidar.` },
+  { name: "Nathan Wilson", resumeText: `SQL Database Administrator. Skills: SQL Server, Optimization, Replication, Data Modelling.` },
+  { name: "Isabella Martinez", resumeText: `Business Analyst. Skills: Requirements gathering, Jira, Confluence, BPMN.` },
+
+  { name: "George Miller", resumeText: `Linux System Administrator. Skills: Bash, Ansible, Networking, Security Hardening.` },
+  { name: "Yuki Tanaka", resumeText: `AI Research Intern. Skills: Python, Deep Learning, Transformers, Research.` },
+  { name: "Michael Scott", resumeText: `Project Manager (PMP). Skills: Agile, Planning, Risk Management, Coordination.` },
+  { name: "Anita Deshmukh", resumeText: `Embedded Test Engineer. Skills: HIL Testing, CANalyzer, ECU validation.` },
+  { name: "Robert King", resumeText: `Java Architect. Skills: Java, Spring Cloud, Microservices, Cloud, CI/CD.` },
 ];
 
-// LocalStorage seed (so it feels like a “database”)
-function loadResumes() {
-  const saved = localStorage.getItem("resumeDB_v1");
-  if (saved) return JSON.parse(saved);
-  localStorage.setItem("resumeDB_v1", JSON.stringify(seedResumes));
-  return seedResumes;
+// --------------------------------------------------------------
+// Helper: Generate summary
+// --------------------------------------------------------------
+function generateSummary(text) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  const firstSentence = clean.split(".")[0];
+  const words = clean.split(" ").slice(0, 25).join(" ");
+  return (firstSentence.length < 140 ? firstSentence : words) + "...";
 }
 
-// ----------------------
-// Helpers
-// ----------------------
-function setStatus(msg) {
-  document.getElementById("status").textContent = msg;
-}
-
-function normalizeQuery(q) {
-  // Expand “C++” into variants USE/keyword score can handle
-  return q
-    .replace(/\bc\+\+\b/gi, "c++ cpp cplusplus c plus plus")
-    .replace(/\bc#\b/gi, "c# csharp c sharp")
-    .replace(/\.net/gi, ".net dotnet")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function tokenize(q) {
-  return q
-    .toLowerCase()
-    .replace(/[^\w\+\#\. ]+/g, " ")   // keep + # . for c++ c# .net tokens
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function cosineSimilarity(vecA, vecB) {
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < vecA.length; i++) {
-    dot += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom ? (dot / denom) : 0;
-}
-
-function keywordBoostScore(query, text) {
-  // Simple “skill presence” booster so symbol-y skills work (C++, C# etc.)
-  const qTokens = tokenize(query);
-  const hay = text.toLowerCase();
-
-  if (qTokens.length === 0) return 0;
-
-  let hits = 0;
-  for (const t of qTokens) {
-    // ignore super-short noise except key skills
-    const isKey = (t === "c++" || t === "cpp" || t === "c#" || t === ".net" || t === "dotnet");
-    if (!isKey && t.length < 3) continue;
-    if (hay.includes(t)) hits++;
-  }
-  return hits / Math.max(1, qTokens.length);
-}
-
+// --------------------------------------------------------------
+// Highlight snippet
+// --------------------------------------------------------------
 function highlightSnippet(text, query) {
-  const terms = Array.from(new Set(tokenize(query)))
-    .filter(t => t.length >= 3 || t === "c++" || t === "cpp" || t === "c#");
+  let out = text.slice(0, 180) + "...";
+  const terms = query.toLowerCase().split(" ").filter(t => t.length > 2);
 
-  let out = text.trim().replace(/\s+/g, " ");
-  // Keep a short snippet
-  out = out.slice(0, 220) + (out.length > 220 ? "..." : "");
-
-  // Highlight terms (basic)
-  for (const t of terms) {
-    const re = new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig");
+  terms.forEach(t => {
+    const re = new RegExp(`(${t})`, "ig");
     out = out.replace(re, "<mark>$1</mark>");
-  }
+  });
+
   return out;
 }
 
-// Debounce: avoid heavy compute on every keystroke
-function debounce(fn, ms) {
-  let id;
-  return (...args) => {
-    clearTimeout(id);
-    id = setTimeout(() => fn(...args), ms);
-  };
-}
+// --------------------------------------------------------------
+// Keyword + semantic scoring
+// --------------------------------------------------------------
+function keywordBoost(query, text) {
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+  let hits = 0;
 
-// ----------------------
-// Model + Precompute Embeddings
-// ----------------------
-async function init() {
-  resumeDB = loadResumes();
+  const tokens = q.split(" ");
 
-  try {
-    setStatus("Loading AI model (Universal Sentence Encoder)...");
-    model = await use.load();
-
-    setStatus("Indexing resumes (one-time)…");
-    // Batch embed all resumes once
-    const texts = resumeDB.map(r => r.resumeText);
-    const emb = await model.embed(texts);
-    resumeEmbeddings = await emb.array(); // [N][D]
-    emb.dispose();
-
-    setStatus("Ready ✅  Try searching: C++ / Java / 5G / Embedded");
-    document.getElementById("searchBox").disabled = false;
-
-    // Show initial results for an example query (optional)
-    renderResults("C++ embedded linux");
-    document.getElementById("searchBox").value = "C++ embedded linux";
-  } catch (e) {
-    console.error(e);
-    setStatus("AI model failed to load in this environment. Falling back to keyword search only.");
-    document.getElementById("searchBox").disabled = false;
-  }
-}
-
-async function embedQuery(q) {
-  const t = await model.embed([q]);
-  const arr = await t.array();
-  t.dispose();
-  return arr[0];
-}
-
-// ----------------------
-// Ranking + UI
-// ----------------------
-async function renderResults(rawQuery) {
-  const resultsDiv = document.getElementById("results");
-  resultsDiv.innerHTML = "";
-
-  const query = normalizeQuery(rawQuery.trim());
-  if (!query) return;
-
-  // If model isn't available, do keyword-only ranking (still shows results)
-  const scored = [];
-
-  let qEmbed = null;
-  if (model && resumeEmbeddings) {
-    qEmbed = await embedQuery(query);
-  }
-
-  const isSymbolSkillQuery = /\bc\+\+\b|\bc#\b|\.net/i.test(rawQuery);
-  // For “C++” type queries, give keyword more weight
-  const wKeyword = isSymbolSkillQuery || tokenize(query).length <= 2 ? 0.65 : 0.30;
-  const wSemantic = 1 - wKeyword;
-
-  for (let i = 0; i < resumeDB.length; i++) {
-    const r = resumeDB[i];
-    const kw = keywordBoostScore(query, r.resumeText);
-
-    let sem = 0;
-    if (qEmbed && resumeEmbeddings) {
-      sem = cosineSimilarity(qEmbed, resumeEmbeddings[i]);
-      // USE cosine often ranges ~0.2–0.8; keep as-is
-    }
-
-    const score = (wSemantic * sem) + (wKeyword * kw);
-    scored.push({ ...r, sem, kw, score });
-  }
-
-  scored.sort((a, b) => b.score - a.score);
-
-  scored.forEach(c => {
-    const card = document.createElement("div");
-    card.className = "candidate-card";
-
-    const scorePct = (c.score * 100).toFixed(2);
-    const semPct = (c.sem * 100).toFixed(1);
-    const kwPct = (c.kw * 100).toFixed(1);
-
-    card.innerHTML = `
-      <div class="score">Match: ${scorePct}%</div>
-      <h3 style="margin:0 0 6px;">${c.name}</h3>
-      <div>${highlightSnippet(c.resumeText, query)}</div>
-      <div class="meta">Semantic: ${semPct}% • Skill-hit: ${kwPct}%</div>
-    `;
-    resultsDiv.appendChild(card);
+  tokens.forEach(tok => {
+    if (t.includes(tok)) hits++;
   });
+
+  return hits / tokens.length;
 }
 
-// ----------------------
-// Events
-// ----------------------
-const searchBox = document.getElementById("searchBox");
-searchBox.addEventListener("input", debounce(() => renderResults(searchBox.value), 250));
+// --------------------------------------------------------------
+// Model loading + embeddings
+// --------------------------------------------------------------
+async function initAI() {
+  document.getElementById("status").innerText = "Loading AI model...";
+  model = await use.load();
+  document.getElementById("dot").classList.add("ok");
+  document.getElementById("status").innerText = "Indexing resumes…";
 
-document.getElementById("clearBtn").addEventListener("click", () => {
-  searchBox.value = "";
-  document.getElementById("results").innerHTML = "";
-  searchBox.focus();
-});
+  const texts = seedResumes.map(r => r.resumeText);
+  const emb = await model.embed(texts);
+  resumeEmbeddings = await emb.array();
+  emb.dispose();
 
-document.querySelectorAll(".pill").forEach(btn => {
-  btn.addEventListener("click", () => {
-    searchBox.value = btn.dataset.q;
-    renderResults(searchBox.value);
-    searchBox.focus();
-  });
-});
+  document.getElementById("status").innerText = "Ready";
+  document.getElementById("searchBox").disabled = false;
+}
 
-// Start
-init();
-</script>
+initAI();
 
-</body>
-</html>
+// --------------------------------------------------------------
+// Main search function
+// --------------------------------------------------------------
+async function searchAnd
